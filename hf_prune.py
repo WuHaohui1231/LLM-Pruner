@@ -27,6 +27,9 @@ def set_random_seed(seed):
     torch.cuda.manual_seed_all(seed)
     
 def main(args):
+
+    # print(args)
+
     set_random_seed(args.seed)
 
     logger = LoggerWithDepth(
@@ -181,6 +184,8 @@ def main(args):
             },
             "root_module_types": [LlamaRMSNorm, LlamaAttention],
         }
+
+        print("KWARGS", kwargs)
 
         pruner = tp.pruner.MetaPruner(
             model,

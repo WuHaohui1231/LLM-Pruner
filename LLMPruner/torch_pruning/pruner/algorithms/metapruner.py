@@ -234,6 +234,9 @@ class MetaPruner:
     def prune_local(self):
         if self.current_step > self.iterative_steps:
             return
+
+        # dummy_grp_num = 1
+
         for group in self.DG.get_all_groups(ignored_layers=self.ignored_layers, root_module_types=self.root_module_types, root_instances=self.root_instances):
             # check pruning rate
             if self._check_sparsity(group):
@@ -263,6 +266,10 @@ class MetaPruner:
                 if consecutive_groups > 1:
                     imp = imp.view(-1, consecutive_groups).sum(1)
 
+                # TEST
+                # print(dummy_grp_num, "IMPORTANCE TEST", imp, len(imp))
+
+
                 imp_argsort = torch.argsort(imp)
                 
                 if ch_groups > 1:
@@ -277,10 +284,17 @@ class MetaPruner:
                         [torch.tensor([j+group_size*i for j in range(group_size)])
                         for i in pruning_groups], 0)
                 else:
+                    # print("NO-CHCG")
                     pruning_idxs = imp_argsort[:n_pruned]
 
                 group = self.DG.get_pruning_group(
                     module, pruning_fn, pruning_idxs.tolist())
+
+
+                # print(pruning_idxs, len(pruning_idxs))
+                # #print(dummy_grp_num, "GROUP IMPORTANCE TEST", group)
+                # dummy_grp_num += 1
+
                 if self.DG.check_pruning_group(group):
                     yield group
 
@@ -309,6 +323,7 @@ class MetaPruner:
             (1 - target_sparsity)
         )
         print(n_pruned, target_sparsity, self.initial_total_channels)
+        # print("NNNNNNNN", n_pruned, target_sparsity, self.initial_total_channels)
         if n_pruned <= 0:
             return
         topk_imp, _ = torch.topk(imp, k=n_pruned, largest=False)
