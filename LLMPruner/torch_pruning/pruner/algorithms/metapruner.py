@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import typing
+import matplotlib.pyplot as plt
 
 from .scheduler import linear_scheduler
 from ..import function
@@ -151,6 +152,9 @@ class MetaPruner:
         if enable_index_mapping:
             for node in self.DG.module2node.values():
                 node.enable_index_mapping = True
+
+        self.groups_importance_attn = None
+        self.groups_importance_mlp = None
     
     def pruning_history(self):
         return self.DG.pruning_history()
@@ -184,6 +188,7 @@ class MetaPruner:
                 return self.prune_local()
             else:
                 for group in self.prune_local():
+                    # pass
                     group.prune()
 
     def estimate_importance(self, group, ch_groups=1, consecutive_groups=1):
@@ -235,7 +240,9 @@ class MetaPruner:
         if self.current_step > self.iterative_steps:
             return
 
-        # dummy_grp_num = 1
+        dummy_grp_num = 1
+        self.groups_importance_attn = []
+        self.groups_importance_mlp = []
 
         for group in self.DG.get_all_groups(ignored_layers=self.ignored_layers, root_module_types=self.root_module_types, root_instances=self.root_instances):
             # check pruning rate
@@ -267,7 +274,12 @@ class MetaPruner:
                     imp = imp.view(-1, consecutive_groups).sum(1)
 
                 # TEST
-                # print(dummy_grp_num, "IMPORTANCE TEST", imp, len(imp))
+                print(dummy_grp_num, "IMPORTANCE TEST", imp, len(imp))
+                if len(imp) == 32:
+                    self.groups_importance_attn.append(imp)
+                else:
+                    self.groups_importance_mlp.append(imp)
+
 
 
                 imp_argsort = torch.argsort(imp)
@@ -293,7 +305,7 @@ class MetaPruner:
 
                 # print(pruning_idxs, len(pruning_idxs))
                 # #print(dummy_grp_num, "GROUP IMPORTANCE TEST", group)
-                # dummy_grp_num += 1
+                dummy_grp_num += 1
 
                 if self.DG.check_pruning_group(group):
                     yield group
@@ -354,3 +366,35 @@ class MetaPruner:
                 module, pruning_fn, pruning_indices.tolist())
             if self.DG.check_pruning_group(group):
                 yield group
+
+    def visualize_importance(self):
+        # print("self.groups_importance_attn", self.groups_importance_attn)
+        imp_matrix_attn = torch.stack(self.groups_importance_attn, dim=0)
+        imp_matrix_attn = imp_matrix_attn.numpy()
+
+        imp_matrix_mlp = torch.stack(self.groups_importance_mlp, dim=0)
+        imp_matrix_mlp = imp_matrix_mlp.numpy()
+
+        fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(20, 5))
+
+        # Create the first heatmap
+        im1 = axs[0].imshow(imp_matrix_attn, cmap='hot', interpolation='nearest', aspect='auto')
+        fig.colorbar(im1, ax=axs[0])
+        axs[0].set_xlabel('Group')  # Label for x-axis
+        axs[0].set_ylabel('Layer')
+
+        # Create the second heatmap
+        im2 = axs[1].imshow(imp_matrix_mlp, cmap='hot', interpolation='nearest', aspect='auto')
+        fig.colorbar(im2, ax=axs[1])
+        axs[1].set_xlabel('Group')  # Label for x-axis
+        axs[1].set_ylabel('Layer')
+
+        # Set titles for the subplots
+        axs[0].set_title('Importance Attention')
+        axs[1].set_title('Importance MLP')
+
+        # Save the plot as a PNG file
+        plt.savefig('/home/haohuiwu/LLM-Pruner/outputs/importance_heatmap_wiki.png')
+
+        # Close the plot to free up memory
+        plt.close()

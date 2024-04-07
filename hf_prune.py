@@ -10,7 +10,7 @@ from typing import Tuple
 
 import torch
 import numpy as np
-from transformers import LlamaTokenizer, GenerationConfig, LlamaConfig
+from transformers import LlamaTokenizer, GenerationConfig, LlamaConfig, AutoTokenizer, AutoModelForCausalLM
 from LLMPruner.models.hf_llama.modeling_llama import LlamaForCausalLM, LlamaRMSNorm, LlamaAttention, LlamaMLP
 
 import LLMPruner.torch_pruning as tp 
@@ -39,8 +39,8 @@ def main(args):
         setup_sublogger=True
     )
 
-    tokenizer = LlamaTokenizer.from_pretrained(args.base_model)
-    model = LlamaForCausalLM.from_pretrained(
+    tokenizer = AutoModelForCausalLM.from_pretrained(args.base_model)
+    model = AutoTokenizer.from_pretrained(
         args.base_model,
         low_cpu_mem_usage=True if args.torch_version >=1.9 else False
     )
@@ -128,7 +128,7 @@ def main(args):
         for i in range(args.iterative_steps):
 
             if pruner_type in ['taylor']:
-                example_prompts = get_examples('bookcorpus', tokenizer, args.num_examples, seq_len = 64).to(args.device)
+                example_prompts = get_examples('wikitext', tokenizer, args.num_examples, seq_len = 64).to(args.device)
                 logger.log("Start Backwarding in iterative steps = {}...".format(i))
                 if args.taylor in ['param_mix', 'param_second']:
                     for j in range(args.num_examples):
@@ -164,6 +164,8 @@ def main(args):
         for name, module in model.named_parameters():
             if 'weight' in name:
                 module.grad = None
+
+        pruner.visualize_importance()
 
         del pruner
 

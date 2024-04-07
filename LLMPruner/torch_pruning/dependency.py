@@ -184,6 +184,9 @@ class Group(object):
         if record_history:
             root_module, pruning_fn, root_pruning_idx = self[0][0].target.module, self[0][0].trigger, self[0][1]
             root_module_name = self._DG._module2name[root_module]
+
+
+
             self._DG._pruning_history.append([root_module_name, self._DG.is_out_channel_pruning_fn(pruning_fn), root_pruning_idx])
 
     def add_dep(self, dep, idxs):
@@ -498,6 +501,9 @@ class DependencyGraph(object):
     def get_all_groups(self, ignored_layers=[], root_module_types=None, root_instances=None):
         visited_layers = []
         ignored_layers = ignored_layers+self.IGNORED_LAYERS
+        print("ROOT INSTANCES")
+        list(map(print, root_instances))
+
         for m in list(self.module2node.keys()):
             if m in ignored_layers:
                 continue
@@ -506,7 +512,7 @@ class DependencyGraph(object):
             if root_module_types is not None:
                 if isinstance(m, tuple(root_module_types)):
                     flag = True
-            
+
             if root_instances is not None:
                 for root_instance in root_instances:
                     if m == root_instance:
