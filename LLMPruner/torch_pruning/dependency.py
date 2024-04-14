@@ -501,8 +501,9 @@ class DependencyGraph(object):
     def get_all_groups(self, ignored_layers=[], root_module_types=None, root_instances=None):
         visited_layers = []
         ignored_layers = ignored_layers+self.IGNORED_LAYERS
-        print("ROOT INSTANCES")
-        list(map(print, root_instances))
+        # print("ROOT INSTANCES")
+        # list(map(print, root_instances))
+        # print(list(self.module2node.keys()))
 
         for m in list(self.module2node.keys()):
             if m in ignored_layers:

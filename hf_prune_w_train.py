@@ -13,6 +13,9 @@ import torch.nn as nn
 import torch.distributed as dist
 import numpy as np
 from transformers import LlamaTokenizer, GenerationConfig, LlamaConfig, AutoTokenizer, AutoModelForCausalLM
+from torch.optim import AdamW, SGD
+
+
 from LLMPruner.models.hf_llama.modeling_llama import LlamaForCausalLM, LlamaRMSNorm, LlamaAttention, LlamaMLP
 
 import LLMPruner.torch_pruning as tp 
@@ -52,8 +55,7 @@ def main(args):
     # print(model)
     # for name, param in model.named_parameters():
     #     print(name, param.dtype)
-    if args.device != "cpu":
-        model.half()
+    model = model.half()
 
     # print("TOR", torch.cuda.device_count())
     # class MyDataParallel(nn.DataParallel):
@@ -67,29 +69,28 @@ def main(args):
 
     # model = nn.parallel.DistributedDataParallel(model)
 
-    model.to(args.device)
+    example_prompts = get_examples(args.dataset, tokenizer, args.num_examples, seq_len=64).to(args.device)
 
-    if args.test_before_train:
-        logger.log("\n==================Generation Results before Pruning================\n")
-        model.eval()
-        with torch.no_grad():
-            for prompt in prompts:
-                input_ids = tokenizer(prompt, return_tensors="pt")['input_ids'].to(args.device)
+    model.to(args.train_device)
 
-                generation_output = model.generate(
-                    input_ids=input_ids,
-                    do_sample=True,
-                    top_k=50,
-                    max_length=args.max_seq_len,
-                    top_p=args.top_p,
-                    temperature=args.temperature,
-                )
-                
-                result = tokenizer.decode(generation_output[0])
-                logger.log(result)
-    
-        ppl = PPLMetric(model, tokenizer, ['wikitext2', 'ptb'], args.max_seq_len, device=args.device)
-        logger.log("PPL before pruning: {}".format(ppl))
+    model.zero_grad()
+
+    optimizer = SGD(model.parameters(), lr=0.0003)
+    #############
+    # Train the model
+    print("Training the model")
+    for i in range(64):
+        # print("batch: ", i)
+        inputs_t = get_examples(args.dataset, tokenizer, 32, seq_len=64)
+        inputs_t = inputs_t.to(args.train_device)
+        outputs_t = model(inputs_t, labels=inputs_t)
+        loss = outputs_t.loss
+        print('loss: ', loss)
+        loss.backward()
+
+        optimizer.step()
+        optimizer.zero_grad()
+    print("End training")
 
     pruner_type = args.pruner_type.lower()
     assert pruner_type in ['random', 'l2', 'l1', 'taylor']
@@ -143,12 +144,14 @@ def main(args):
         logger.log("Number of example for importance: {}".format(args.num_examples))
         logger.log("Seed: {}".format(args.seed))
 
+        model.to(args.device)
+        model.zero_grad()
+
         pruner = tp.pruner.MetaPruner(
             model,
             forward_prompts,
             **kwargs
         )
-        model.zero_grad()
 
         print("DEVICE", next(model.parameters()).device)
 
@@ -156,7 +159,7 @@ def main(args):
         for i in range(args.iterative_steps):
 
             if pruner_type in ['taylor']:
-                example_prompts = get_examples('bookcorpus', tokenizer, args.num_examples, seq_len = 64).to(args.device)
+
                 logger.log("Start Backwarding in iterative steps = {}...".format(i))
                 if args.taylor in ['param_mix', 'param_second']:
                     for j in range(args.num_examples):
@@ -194,7 +197,7 @@ def main(args):
             if 'weight' in name:
                 module.grad = None
 
-        path = 'imp_heat_s' + str(args.seed) + '_' + str(args.num_examples) + '_onePass_' + args.dataset[:3]
+        path = 'imp_heat_s' + str(args.seed) + '_' + str(args.num_examples) + '_onePass_' + args.dataset[:3] + 'wtr'
         pruner.visualize_importance(path)
 
         del pruner
@@ -230,7 +233,7 @@ def main(args):
         for i in range(args.iterative_steps):
 
             if pruner_type in ['taylor']:
-                example_prompts = get_examples('bookcorpus', tokenizer, args.num_examples, seq_len = 64)
+                example_prompts = get_examples(args.dataset, tokenizer, args.num_examples, seq_len = 64)
                 logger.log("Start Backwarding in iterative steps = {}...".format(i))
                 loss = model(example_prompts, labels=example_prompts).loss
                 logger.log("Loss = {}".format(loss))
@@ -303,7 +306,7 @@ def main(args):
     
     ppl = PPLMetric(model, tokenizer, ['wikitext2', 'ptb'], args.max_seq_len, device=args.eval_device)
     logger.log("PPL after pruning: {}".format(ppl))
-    logger.log("Memory Requirement: {} MiB\n".format(torch.cuda.memory_allocated()/1024/1024))
+    # logger.log("Memory Requirement: {} MiB\n".format(torch.cuda.memory_allocated()/1024/1024))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Pruning LLaMA (huggingface version)')
@@ -340,6 +343,7 @@ if __name__ == "__main__":
     parser.add_argument('--device', type=str, default="cuda", help='device')
     parser.add_argument('--test_before_train', action='store_true', help='whether test before train')
     parser.add_argument('--eval_device', type=str, default="cuda", help='eval device')
+    parser.add_argument('--train_device', type=str, default="cuda", help='train device')
     parser.add_argument('--test_after_train', action='store_true', help='whether test after train')
 
     parser.add_argument('--seed', type=int, default=42, help='seed')

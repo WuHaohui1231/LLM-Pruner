@@ -43,8 +43,8 @@ def main(args):
 
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    tokenizer = LlamaTokenizer.from_pretrained(args.base_model)
-    model = LlamaForCausalLM.from_pretrained(
+    tokenizer = AutoTokenizer.from_pretrained(args.base_model)
+    model = AutoModelForCausalLM.from_pretrained(
         args.base_model,
         low_cpu_mem_usage=True if args.torch_version >=1.9 else False
     )

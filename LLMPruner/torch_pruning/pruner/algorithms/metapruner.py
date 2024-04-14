@@ -63,6 +63,7 @@ class MetaPruner:
         forward_fn: typing.Callable = None,
         output_transform: typing.Callable = None,
         enable_index_mapping: bool = False,
+        # imp_hm_path: str = 'importance_heatmap_default'
     ):
         self.model = model
         self.importance = importance
@@ -155,6 +156,8 @@ class MetaPruner:
 
         self.groups_importance_attn = None
         self.groups_importance_mlp = None
+
+        # self.imp_hm_path = imp_hm_path
     
     def pruning_history(self):
         return self.DG.pruning_history()
@@ -189,6 +192,7 @@ class MetaPruner:
             else:
                 for group in self.prune_local():
                     # pass
+                    # print(group)
                     group.prune()
 
     def estimate_importance(self, group, ch_groups=1, consecutive_groups=1):
@@ -244,6 +248,8 @@ class MetaPruner:
         self.groups_importance_attn = []
         self.groups_importance_mlp = []
 
+        # print("MAX-CH-SPARSITY", self.max_ch_sparsity)
+        # print("LEN-ALL-GROUP", len(self.DG.get_all_groups(ignored_layers=self.ignored_layers, root_module_types=self.root_module_types, root_instances=self.root_instances)))
         for group in self.DG.get_all_groups(ignored_layers=self.ignored_layers, root_module_types=self.root_module_types, root_instances=self.root_instances):
             # check pruning rate
             if self._check_sparsity(group):
@@ -274,11 +280,14 @@ class MetaPruner:
                     imp = imp.view(-1, consecutive_groups).sum(1)
 
                 # TEST
-                print(dummy_grp_num, "IMPORTANCE TEST", imp, len(imp))
-                if len(imp) == 32:
+                # print(dummy_grp_num, "IMPORTANCE TEST", imp, len(imp))
+                is_attention = 'empty'
+                if len(imp) <= 32:
                     self.groups_importance_attn.append(imp)
+                    is_attention = 'attention'
                 else:
                     self.groups_importance_mlp.append(imp)
+                    is_attention = 'MLP'
 
 
 
@@ -303,7 +312,7 @@ class MetaPruner:
                     module, pruning_fn, pruning_idxs.tolist())
 
 
-                # print(pruning_idxs, len(pruning_idxs))
+                #print(dummy_grp_num, is_attention, len(pruning_idxs))
                 # #print(dummy_grp_num, "GROUP IMPORTANCE TEST", group)
                 dummy_grp_num += 1
 
@@ -367,13 +376,30 @@ class MetaPruner:
             if self.DG.check_pruning_group(group):
                 yield group
 
-    def visualize_importance(self):
+    def visualize_importance(self, imp_hm_path):
         # print("self.groups_importance_attn", self.groups_importance_attn)
+        # if is_2nd:
+        #     imp_matrix_mlp = torch.stack(self.groups_importance_mlp, dim=0)
+        #     imp_matrix_mlp = imp_matrix_mlp.cpu().numpy()
+        #     plt.imshow(imp_matrix_mlp, cmap='hot', interpolation='nearest', aspect='auto', vmin=0, vmax=0.02)
+        #
+        #     plt.colorbar()
+        #     plt.set_xlabel('Group')  # Label for x-axis
+        #     plt.set_ylabel('Layer')
+        #     plt.set_title('Importance MLP')
+        #
+        #     path = '/home/haohuiwu/LLM-Pruner/outputs/' + imp_hm_path + '.png'
+        #     # Save the plot as a PNG file
+        #     plt.savefig(path)
+        #
+        #     plt.close()
+        #     return
+
         imp_matrix_attn = torch.stack(self.groups_importance_attn, dim=0)
-        imp_matrix_attn = imp_matrix_attn.numpy()
+        imp_matrix_attn = imp_matrix_attn.cpu().numpy()
 
         imp_matrix_mlp = torch.stack(self.groups_importance_mlp, dim=0)
-        imp_matrix_mlp = imp_matrix_mlp.numpy()
+        imp_matrix_mlp = imp_matrix_mlp.cpu().numpy()
 
         fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(20, 5))
 
@@ -384,7 +410,7 @@ class MetaPruner:
         axs[0].set_ylabel('Layer')
 
         # Create the second heatmap
-        im2 = axs[1].imshow(imp_matrix_mlp, cmap='hot', interpolation='nearest', aspect='auto')
+        im2 = axs[1].imshow(imp_matrix_mlp, cmap='hot', interpolation='nearest', aspect='auto', vmin=0, vmax=0.02)
         fig.colorbar(im2, ax=axs[1])
         axs[1].set_xlabel('Group')  # Label for x-axis
         axs[1].set_ylabel('Layer')
@@ -393,8 +419,9 @@ class MetaPruner:
         axs[0].set_title('Importance Attention')
         axs[1].set_title('Importance MLP')
 
+        path = '/home/haohuiwu/LLM-Pruner/outputs/' + imp_hm_path + '.png'
         # Save the plot as a PNG file
-        plt.savefig('/home/haohuiwu/LLM-Pruner/outputs/importance_heatmap_wiki.png')
+        plt.savefig(path)
 
         # Close the plot to free up memory
         plt.close()

@@ -241,6 +241,7 @@ class TaylorImportance(tp.importance.Importance):
     
         group_imp = []
         for dep, idxs in group:
+            # print(idxs)
             idxs.sort()
             layer = dep.target.module
             prune_fn = dep.handler
