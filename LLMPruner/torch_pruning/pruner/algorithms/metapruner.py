@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import typing
@@ -409,8 +410,10 @@ class MetaPruner:
         axs[0].set_xlabel('Group')  # Label for x-axis
         axs[0].set_ylabel('Layer')
 
+        upper_bound = np.percentile(imp_matrix_mlp, 99.9)
+
         # Create the second heatmap
-        im2 = axs[1].imshow(imp_matrix_mlp, cmap='hot', interpolation='nearest', aspect='auto', vmin=0, vmax=0.02)
+        im2 = axs[1].imshow(imp_matrix_mlp, cmap='hot', interpolation='nearest', aspect='auto', vmin=0, vmax=upper_bound)
         fig.colorbar(im2, ax=axs[1])
         axs[1].set_xlabel('Group')  # Label for x-axis
         axs[1].set_ylabel('Layer')

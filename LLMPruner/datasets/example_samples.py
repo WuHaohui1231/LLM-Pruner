@@ -46,11 +46,11 @@ def get_wikitext(tokenizer, n_samples, seq_len):
         # 'allenai/c4', 'en', data_files={'train': 'en/c4-train.00000-of-01024.json.gz'}, split='train'
         'wikitext', 'wikitext-2-v1', split='train'
     )
-
+    n = len(traindata)
     tokenized_samples, history = [], []
     for _ in range(n_samples):
         while True:
-            i = random.randint(0, len(traindata) - 1)
+            i = random.randint(0, n - 1)
             tokenized_sample = tokenizer(traindata[i]['text'], return_tensors='pt')
             if tokenized_sample.input_ids.shape[1] >= seq_len and i not in history:
                 history.append(i)
